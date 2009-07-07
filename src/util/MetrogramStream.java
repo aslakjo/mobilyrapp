@@ -19,7 +19,7 @@ public class MetrogramStream {
     double lat = 10.0;
     double lon = 60.1;
     int height = -1;
-    String url = "http://84.215.93.57/";
+    String url = "http://mobilyr.appspot.com/";
     
     public MetrogramStream()
     {

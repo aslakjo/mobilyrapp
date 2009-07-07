@@ -4,6 +4,10 @@
  */
 package metrogram;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import javax.microedition.rms.RecordStoreException;
+import javax.microedition.rms.RecordStoreNotOpenException;
 import util.SVGImageCanvas;
 import javax.microedition.midlet.*;
 import javax.microedition.lcdui.*;
@@ -11,6 +15,7 @@ import javax.microedition.location.LocationException;
 import javax.microedition.location.LocationProvider;
 import javax.microedition.location.QualifiedCoordinates;
 import javax.microedition.m2g.SVGImage;
+import javax.microedition.rms.RecordStore;
 import util.MetrogramStream;
 
 /**
@@ -30,12 +35,18 @@ public class MobilYr extends MIDlet implements CommandListener {
     private TextField yposisjon;
     //</editor-fold>//GEN-END:|fields|0|
     private Command BACK = new Command("Tilbake", Command.BACK, 0);
+    private Command SAVE;
     private SVGImageCanvas canvas = null;
+    private MetrogramStream stream;
+    private Command retriveSavedImageCommand;
+    private String RECORD_STORE = "record_store";
+    private int recordId;
 
     /**
      * The MobilYr constructor.
      */
     public MobilYr() {
+        SAVE = new Command("Lagre", Command.ITEM, 0);
     }
 
 
@@ -97,13 +108,13 @@ public class MobilYr extends MIDlet implements CommandListener {
                         QualifiedCoordinates cords = null;
                         try {
                             System.out.print("waiting for cordinates ...");
-                            int TIMEOUT = 30;
+                            int TIMEOUT = 60;
                             cords = LocationProvider.getInstance(null).getLocation(TIMEOUT).getQualifiedCoordinates();
                             System.out.println("ok");
-                        }catch(LocationException e){
+                        } catch (LocationException e) {
                             new Alert("Gps problem", "Kunne ikke skaffe gps posisjon før tiden gikk ut", null, null);
-                        }catch (Exception e) {
-                            new Alert("Problem", "Problemer med å skaffe gps posisjon, " + e.getMessage(), null,null);
+                        } catch (Exception e) {
+                            new Alert("Problem", "Problemer med å skaffe gps posisjon, " + e.getMessage(), null, null);
                         }
 
                         System.out.println("Found cordinates");
@@ -114,6 +125,63 @@ public class MobilYr extends MIDlet implements CommandListener {
                 };
 
                 t.start();
+            }else if (command == retriveSavedImageCommand) {
+                SVGImageCanvas canvas = null;
+                RecordStore store = null;
+                try {
+                    store = RecordStore.openRecordStore(RECORD_STORE, false);
+                    System.out.println("fetching image " + recordId);
+                    byte[] bytes = store.getRecord(recordId);
+                    System.out.println("fetched #"  + bytes.length);
+                    ByteArrayInputStream byteStream = new ByteArrayInputStream(bytes);
+                    canvas = setupSvgImageCanvas(canvas, byteStream);
+                    getDisplay().setCurrent(canvas);
+
+                    System.out.println("canvas delivered");
+                } catch (Exception exception) {
+                    exception.printStackTrace();
+                } finally {
+                    try {
+                        store.closeRecordStore();
+                    } catch (RecordStoreNotOpenException ex) {
+                        ex.printStackTrace();
+                    } catch (RecordStoreException ex) {
+                        ex.printStackTrace();
+                    }
+                }
+            }
+        } else {
+            if (command == SAVE) {
+                System.out.println("stream is " + stream);
+                RecordStore store = null;
+
+                if (stream != null) {
+                    byte[] image = new byte[10000];
+                    try {
+                        int size = stream.fetch().read(image);
+
+                        store = RecordStore.openRecordStore(RECORD_STORE, true);
+                        recordId = store.addRecord(image, 0, size);
+                        System.out.println("saved store " + recordId + " bytes #" + size);
+
+                    } catch (RecordStoreNotOpenException ex) {
+                        ex.printStackTrace();
+                    } catch (RecordStoreException ex) {
+                        ex.printStackTrace();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    } finally {
+                        try {
+                            store.closeRecordStore();
+                        } catch (RecordStoreNotOpenException ex) {
+                            ex.printStackTrace();
+                        } catch (RecordStoreException ex) {
+                            ex.printStackTrace();
+                        }
+                    }
+                }
+            }  else {
+                System.out.println("command not found " + command.toString());
             }
         //GEN-BEGIN:|7-commandAction|5|7-postCommandAction
         }//GEN-END:|7-commandAction|5|7-postCommandAction
@@ -154,6 +222,7 @@ public class MobilYr extends MIDlet implements CommandListener {
             form.addCommand(getExitCommand());
             form.addCommand(getSearch());
             form.addCommand(getGpsLocationButton());
+//            form.addCommand(getRetreiveSavedImageButton());
             form.setCommandListener(this);//GEN-END:|14-getter|1|14-postInit
         // write post-init user code here
         }//GEN-BEGIN:|14-getter|2|
@@ -267,7 +336,7 @@ public class MobilYr extends MIDlet implements CommandListener {
 
 
         try {
-            MetrogramStream stream = new MetrogramStream();
+            stream = new MetrogramStream();
             if (lat > 0) {
                 stream.setLat(lat);
             }
@@ -277,13 +346,8 @@ public class MobilYr extends MIDlet implements CommandListener {
             if (height > 0) {
                 stream.setHeight(height);
             }
-            SVGImage svgImage = (SVGImage) SVGImage.createImage(stream.fetch(), null);
-            canvas = new SVGImageCanvas(svgImage);
 
-
-            canvas.addCommand(BACK);
-
-            canvas.setCommandListener(this);
+            canvas = setupSvgImageCanvas(canvas, stream.fetch());
         } catch (Exception e) {
 
             System.err.println("#Error:" + e.getMessage());
@@ -326,5 +390,20 @@ public class MobilYr extends MIDlet implements CommandListener {
      * @param unconditional if true, then the MIDlet has to be unconditionally terminated and all resources has to be released.
      */
     public void destroyApp(boolean unconditional) {
+    }
+
+    private Command getRetreiveSavedImageButton() {
+        retriveSavedImageCommand = new Command("Hent bilde", Command.ITEM, 0);
+        return retriveSavedImageCommand;
+    }
+
+    private SVGImageCanvas setupSvgImageCanvas(SVGImageCanvas canvas, InputStream stream) throws Exception {
+        
+        SVGImage svgImage = (SVGImage) SVGImage.createImage(stream, null);
+        canvas = new SVGImageCanvas(svgImage);
+        canvas.addCommand(BACK);
+//        canvas.addCommand(SAVE);
+        canvas.setCommandListener(this);
+        return canvas;
     }
 }
