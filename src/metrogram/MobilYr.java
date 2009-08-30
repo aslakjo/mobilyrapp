@@ -41,6 +41,7 @@ public class MobilYr extends MIDlet implements CommandListener {
     private Command retriveSavedImageCommand;
     private String RECORD_STORE = "record_store";
     private int recordId;
+    private TextField height;
 
     /**
      * The MobilYr constructor.
@@ -107,20 +108,23 @@ public class MobilYr extends MIDlet implements CommandListener {
                         System.out.println("starting looking for cordinates");
                         QualifiedCoordinates cords = null;
                         try {
-                            System.out.print("waiting for cordinates ...");
+                            yposisjon.setString("Searching GPS...");
+                            xposisjon.setString("Searching GPS...");
+                            height.setString("Searching GPS...");
                             int TIMEOUT = 60;
                             cords = LocationProvider.getInstance(null).getLocation(TIMEOUT).getQualifiedCoordinates();
                             System.out.println("ok");
                         } catch (LocationException e) {
-                            new Alert("Gps problem", "Kunne ikke skaffe gps posisjon før tiden gikk ut", null, null);
+                            getDisplay().setCurrent(new Alert("Gps problem", "Kunne ikke skaffe gps posisjon før tiden gikk ut", null, AlertType.ERROR));
                         } catch (Exception e) {
-                            new Alert("Problem", "Problemer med å skaffe gps posisjon, " + e.getMessage(), null, null);
+                            getDisplay().setCurrent(new Alert("Problem", "Problemer med å skaffe gps posisjon, " + e.getMessage(), null, AlertType.ERROR));
                         }
 
-                        System.out.println("Found cordinates");
+                        System.out.println("Found cordinates" + cords.getAltitude());
 
                         yposisjon.setString(Double.toString(cords.getLatitude()));
                         xposisjon.setString(Double.toString(cords.getLongitude()));
+                        height.setString("" + cords.getAltitude());
                     }
                 };
 
@@ -218,7 +222,7 @@ public class MobilYr extends MIDlet implements CommandListener {
     public Form getForm() {
         if (form == null) {//GEN-END:|14-getter|0|14-preInit
             // write pre-init user code here
-            form = new Form("Welcome", new Item[]{getStringItem(), getXposisjon(), getYposisjon()});//GEN-BEGIN:|14-getter|1|14-postInit
+            form = new Form("Welcome", new Item[]{getStringItem(), getXposisjon(), getYposisjon(), getHeight()});//GEN-BEGIN:|14-getter|1|14-postInit
             form.addCommand(getExitCommand());
             form.addCommand(getSearch());
             form.addCommand(getGpsLocationButton());
@@ -390,6 +394,13 @@ public class MobilYr extends MIDlet implements CommandListener {
      * @param unconditional if true, then the MIDlet has to be unconditionally terminated and all resources has to be released.
      */
     public void destroyApp(boolean unconditional) {
+    }
+
+    protected Item getHeight() {
+        if (height == null) {
+            height = new TextField("Height", null, 32, TextField.ANY);
+        }
+        return height;
     }
 
     private Command getRetreiveSavedImageButton() {
